@@ -1,0 +1,24 @@
+{
+  "name": "pong",
+  "version": "0.0.1",
+  "description": "A replica of the famous pong game",
+  "main": "index.js",
+  "scripts": {
+    "test": "npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/vicnicius/pong.git"
+  },
+  "keywords": [
+    "javascript",
+    "game",
+    "pong"
+  ],
+  "author": "Vinicius Andrade <vini.andrade.dev@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/vicnicius/pong/issues"
+  },
+  "homepage": "https://github.com/vicnicius/pong#readme"
+}
