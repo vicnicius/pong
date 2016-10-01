@@ -8,8 +8,8 @@ function Game () {
     player2x: 0,
     score2: 0,
     ball: [65, 65],
-    speed: [9, 0] //Speed, Angle (rad)
-  };
+    speed: [10, 0] // Speed, Angle (rad)
+  }
   const ballDx = () => state.ball[0] + state.speed[0] * Math.cos(state.speed[1])
   const ballDy = () => state.ball[1] + state.speed[0] * Math.sin(state.speed[1])
   const newSpeed = () => {
@@ -24,24 +24,20 @@ function Game () {
     }
 
     // If the ball colides with one of the players
-    if (x + 15 >= state.player1x || x  <= state.player2x + 25) {
+    if (x + 15 >= state.player1x || x <= state.player2x + 25) {
       resultSpeed = state.speed[0] * -1
       drawPlayers()
     }
 
     return [resultSpeed, resultAngle]
   }
-  let cache = {
-    player1: [0, 0],
-    player2: [0, 0]
-  };
 
   eng.drawScores(state.score1, state.score2)
   eng.drawNet()
 
   function drawPlayers () {
-      eng.drawPlayer(state.player1x, state.player1y)
-      eng.drawPlayer(state.player2x, state.player2y)
+    eng.drawPlayer(state.player1x, state.player1y)
+    eng.drawPlayer(state.player2x, state.player2y)
   }
 
   function draw () {
@@ -57,6 +53,40 @@ function Game () {
 }
 
 function Engine (ctx) {
+  function blurGradient (x, y, w, h, dx) {
+    const x0 = x
+    const y0 = y - h / 2
+    const x1 = x + w
+    const y1 = y0
+    const linearGradient = ctx.createLinearGradient(x0, y0, x1, y1)
+    const solid = 'rgba(0, 0, 0, 1)'
+    const transparent = 'rgba(0, 0, 0, 0)'
+    const color1 = dx < 0 ? solid : transparent
+    const color2 = dx >= 0 ? solid : transparent
+
+    linearGradient.addColorStop(0, color1)
+    linearGradient.addColorStop(dx < 0 ? 0.6 : 0.4, solid)
+    linearGradient.addColorStop(1, color2)
+
+    return linearGradient
+  }
+
+  let lastBallBlur
+  function drawBallBlur (x0, y0, dx, dy) {
+    const w = 15 + Math.abs(dx)
+    const h = 15 + Math.abs(dy)
+    const x = dx < 0 ? x0 + dx : x0
+    const y = dy < 0 ? y0 + dy : y0
+    ctx.fillStyle = blurGradient(x, y, w, h, dx)
+
+    if (lastBallBlur) {
+      ctx.clearRect.apply(ctx, lastBallBlur)
+    }
+
+    lastBallBlur = [x, y, w, h]
+    ctx.fillRect(x, y, w, h)
+  }
+
   function drawPlayer (x, y) {
     return ctx.fillRect(x, y, 25, 100)
   }
@@ -79,10 +109,14 @@ function Engine (ctx) {
   function drawBall ([x1, y1]) {
     if (prevBallPosition) {
       const [x0, y0] = prevBallPosition
-      ctx.clearRect(x0, y0, 15, 15)
+      const [dx, dy] = [x1 - x0, y1 - y0]
+      ctx.clearRect.apply(ctx, prevBallPosition)
+      ctx.save()
+      drawBallBlur(x0, y0, dx, dy)
     }
-    ctx.fillRect(x1, y1, 15, 15)
-    prevBallPosition = [x1, y1]
+    ctx.restore()
+    // ctx.fillRect(x1, y1, 15, 15)
+    prevBallPosition = [x1, y1, 15, 15]
   }
 
   function drawScores (score1, score2) {
