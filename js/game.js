@@ -1,9 +1,10 @@
 function Game () {
-  let waiting = false
+  const getRandom = (min, max) => Math.random() * (max - min) + min
   const gameEl = document.getElementById('game')
   const {top, bottom} = gameEl.getBoundingClientRect()
   const eng = Engine(gameEl.getContext('2d'))
   const state = {
+    waiting: false,
     player1y: 25,
     player1x: 775,
     score1: 0,
@@ -11,31 +12,29 @@ function Game () {
     player2x: 0,
     score2: 0,
     ball: [65, 65],
-    speed: [5, Math.PI / 6] // Speed, Angle (rad)
+    speed: [5, getRandom(-Math.PI / 6, Math.PI / 6)] // Speed, Angle (rad)
   }
   const ballDx = () => state.ball[0] + state.speed[0] * Math.cos(state.speed[1])
   const ballDy = () => state.ball[1] + state.speed[0] * Math.sin(state.speed[1])
 
-  function reset () {
+  function reset (state) {
     state.player1y = 25
     state.player2y = 25
     state.ball = [65, 65]
-    waiting = true
+    state.waiting = true
     setTimeout(() => {
-      waiting = false
-      state.speed = [8, Math.PI / 6]
-      draw()
+      state.waiting = false
     }, 3000)
   }
 
-  function newSpeed () {
+  function newSpeed (state) {
     const y = state.ball[1]
     const x = state.ball[0]
     let resultSpeed = state.speed[0]
     let resultAngle = state.speed[1]
 
     // If the ball colides with the game top-bottom screen limit, revert it's angle
-    if (y >= bottom || y <= top) {
+    if (y + 15 >= 600 || y <= top) {
       resultAngle = -state.speed[1]
     }
 
@@ -45,10 +44,10 @@ function Game () {
       if (state.player1y <= y && y <= state.player1y + 100) {
         // resultAngle = eng.reflectionAngle(state.player1y, y, state.speed[1])
         resultAngle = Math.PI - resultAngle
-        resultSpeed = state.speed[0] + .5
+        resultSpeed = state.speed[0] + 0.5
       } else {
         state.score1 = state.score1 + 1
-        reset()
+        reset(state)
       }
     }
 
@@ -56,7 +55,7 @@ function Game () {
       if (state.player2y <= y && y <= state.player2y + 100) {
         // resultAngle = eng.reflectionAngle(state.player2y, y, state.speed[1])
         resultAngle = Math.PI - resultAngle
-        resultSpeed = state.speed[0] + .5
+        resultSpeed = state.speed[0] + 0.5
       } else {
         state.score2 = state.score2 + 1
         reset()
@@ -67,14 +66,14 @@ function Game () {
   }
 
   let player1Last, player2Last
-  function drawPlayers () {
+  function drawPlayers (state) {
     eng.drawPlayer(state.player1x, state.player1y, player1Last)
     eng.drawPlayer(state.player2x, state.player2y, player2Last)
     player1Last = [state.player1x, state.player1y, 25, 100]
     player2Last = [state.player2x, state.player2y, 25, 100]
   }
 
-  function moveAI () {
+  function moveAI (state) {
     const proposedDy = state.speed[0] * Math.sin(state.speed[1])
     const player2dy = Math.abs(proposedDy) > 8
                         ? proposedDy > 0 ? 8 : -8
@@ -84,17 +83,19 @@ function Game () {
   }
 
   function draw () {
-    if (!waiting) {
+    if (!state.waiting) {
       state.ball = [ballDx(), ballDy()]
-      state.speed = newSpeed()
-      state.player2y = moveAI()
+      state.speed = newSpeed(state)
+      state.player2y = moveAI(state)
       eng.clear()
-      eng.drawBall(state.ball, state.speed[1])
-      drawPlayers()
+      eng.drawBall(state.ball, state.speed[1], state.speed[0])
+      drawPlayers(state)
       eng.drawScores(state.score1, state.score2)
       eng.drawNet()
-      window.requestAnimationFrame(draw)
+    } else {
+      state.speed = [5, getRandom(-Math.PI / 6, Math.PI / 6)]
     }
+    window.requestAnimationFrame(draw)
   }
   eng.setEvents(gameEl, top, bottom, state)
 
@@ -102,42 +103,6 @@ function Game () {
 }
 
 function Engine (ctx) {
-  function blurGradient (x, y, w, h, dx) {
-    const x0 = x
-    const y0 = y - h / 2
-    const x1 = x + w
-    const y1 = y0
-    const linearGradient = ctx.createLinearGradient(x0, y0, x1, y1)
-    const solid = 'rgba(0, 0, 0, 1)'
-    const transparent = 'rgba(0, 0, 0, 0)'
-    const color1 = dx < 0 ? solid : transparent
-    const color2 = dx >= 0 ? solid : transparent
-
-    linearGradient.addColorStop(0, color1)
-    linearGradient.addColorStop(dx < 0 ? 0.6 : 0.4, solid)
-    linearGradient.addColorStop(1, color2)
-
-    return linearGradient
-  }
-
-  let lastBallBlur
-  function drawBallBlur (x0, y0, dx, dy, angle) {
-    const w = 15 + Math.abs(dx) + Math.abs(Math.cos(angle) * dy)
-    const h = 15 + Math.abs(dy)
-    const x = dx < 0 ? x0 + dx : x0
-    const y = dy < 0 ? y0 + dy : y0
-    ctx.fillStyle = blurGradient(x, y, w, 15, dx)
-
-    if (lastBallBlur) {
-      ctx.clearRect.apply(ctx, lastBallBlur)
-    }
-
-    lastBallBlur = [x, y, w, h]
-    // ctx.translate(x0 + w / 2, y0 + h / 2)
-    // ctx.rotate(angle)
-    ctx.fillRect(x, y, w, 15)
-  }
-
   function drawPlayer (x, y, cache) {
     if (cache) {
       ctx.clearRect.apply(ctx, cache)
@@ -154,24 +119,23 @@ function Engine (ctx) {
     ctx.restore()
   }
 
-  let prevBallPosition
-  function drawBall ([x1, y1], angle) {
-    let [x0, y0, dx, dy] = [0, 0, 0, 0]
-    if (prevBallPosition) {
-      [x0, y0] = prevBallPosition
-      dx = x1 - x0
-      dy = y1 - y0
-      // ctx.save()
-      // if (dx === 0 && dy === 0) {
-      ctx.fillRect(x1, y1, 15, 15)
-      // } else {
-        // drawBallBlur(x0, y0, dx, dy, angle)
-      // }
-      // ctx.restore()
+  function drawBluriedBall (position, idx) {
+    if (position) {
+      ctx.save()
+      ctx.fillStyle = `rgba(0, 0, 0, .05)`
+      ctx.fillRect(position[0], position[1], 15, 15)
+      ctx.restore()
     }
+  }
 
-    //ClearRect issue
-    prevBallPosition = [x1 - 5, y1 - 5, 15 + 10, 15 + 10]
+  let prevBallPositions = []
+  function drawBall ([x1, y1], angle, speed) {
+    prevBallPositions.map(drawBluriedBall)
+    ctx.fillRect(x1, y1, 15, 15)
+    prevBallPositions.push([x1, y1])
+    if (prevBallPositions.length >= speed - 12) {
+      prevBallPositions.shift()
+    }
   }
 
   function reflectionAngle (playerY, ballY, ballCurrentAngle) {
@@ -209,6 +173,11 @@ function Engine (ctx) {
 
   function setEvents (element, top, bottom, state) {
     element.onmousemove = handleMousemove(state, top, bottom)
+    element.onclick = () => {
+      if (state.waiting) {
+        state.waiting = false
+      }
+    }
   }
 
   return {
