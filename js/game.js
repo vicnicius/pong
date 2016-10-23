@@ -4,6 +4,7 @@ function Game () {
   const {top, bottom} = gameEl.getBoundingClientRect()
   const eng = Engine(gameEl.getContext('2d'))
   const state = {
+    level: 5,
     waiting: false,
     player1y: 25,
     player1x: 775,
@@ -17,10 +18,15 @@ function Game () {
   const ballDx = () => state.ball[0] + state.speed[0] * Math.cos(state.speed[1])
   const ballDy = () => state.ball[1] + state.speed[0] * Math.sin(state.speed[1])
 
-  function reset (state) {
+  function reset () {
+    eng.resetEngine()
     state.player1y = 25
     state.player2y = 25
     state.ball = [65, 65]
+    eng.drawBall(state.ball, state.speed[1], state.speed[0])
+    drawPlayers(state)
+    eng.drawScores(state.score1, state.score2)
+    eng.drawNet()
     state.waiting = true
     setTimeout(() => {
       state.waiting = false
@@ -28,10 +34,38 @@ function Game () {
   }
 
   function newSpeed (state) {
-    const y = state.ball[1]
-    const x = state.ball[0]
     let resultSpeed = state.speed[0]
     let resultAngle = state.speed[1]
+    const y = state.ball[1]
+    const x = state.ball[0]
+
+    function getNewAngle (playerY, ballY, fromLeft) {
+      const isOnAngleLimit = (proposed) => {
+        const angle = proposed * (180 / Math.PI)
+        const reducedAngle = (toReduceAngle) => {
+          let limited = toReduceAngle
+          if (limited > 180) {
+            limited = toReduceAngle - 360
+          } else if (limited < -180) {
+            limited = toReduceAngle + 360
+          }
+
+          return limited > 180 || limited < -180 ? reducedAngle(limited) : limited
+        }
+        const condition = reducedAngle(angle) > -90 && reducedAngle(angle) < 90
+        return fromLeft ? !condition : condition
+      }
+      const randomFactor = getRandom(-Math.PI / 8, Math.PI / 8)
+      let proposed
+
+      if (playerY + 25 <= ballY && ballY <= playerY + 50) {
+        proposed = Math.PI - resultAngle
+      } else {
+        proposed = Math.PI - resultAngle - (ballY / (playerY + 50) * randomFactor)
+      }
+
+      return isOnAngleLimit(proposed) ? proposed : getNewAngle(playerY, ballY, fromLeft)
+    }
 
     // If the ball colides with the game top-bottom screen limit, revert it's angle
     if (y + 15 >= 600 || y <= top) {
@@ -41,9 +75,9 @@ function Game () {
     // If the ball colides with player x-axis (The one on the right)
     if (x + 15 >= state.player1x) {
       // Check if it colides with the players y-axis also
-      if (state.player1y <= y && y <= state.player1y + 100) {
+      if (state.player1y - 15 < y && y < state.player1y + 100) {
         // resultAngle = eng.reflectionAngle(state.player1y, y, state.speed[1])
-        resultAngle = Math.PI - resultAngle
+        resultAngle = getNewAngle(state.player1y, y, true)
         resultSpeed = state.speed[0] + 0.5
       } else {
         state.score1 = state.score1 + 1
@@ -52,9 +86,9 @@ function Game () {
     }
 
     if (x <= state.player2x + 25) {
-      if (state.player2y <= y && y <= state.player2y + 100) {
+      if (state.player2y - 15 < y && y < state.player2y + 100) {
         // resultAngle = eng.reflectionAngle(state.player2y, y, state.speed[1])
-        resultAngle = Math.PI - resultAngle
+        resultAngle = getNewAngle(state.player2y, y, false)
         resultSpeed = state.speed[0] + 0.5
       } else {
         state.score2 = state.score2 + 1
@@ -74,12 +108,13 @@ function Game () {
   }
 
   function moveAI (state) {
-    const proposedDy = state.speed[0] * Math.sin(state.speed[1])
-    const player2dy = Math.abs(proposedDy) > 8
-                        ? proposedDy > 0 ? 8 : -8
+    const proposedDy = state.ball[1] - (state.player2y + 42.5)
+    const player2dy = Math.abs(proposedDy) > state.level
+                        ? proposedDy > 0 ? state.level : -state.level
                         : proposedDy
+    const pos = state.player2y + player2dy
 
-    return state.player2y + player2dy
+    return pos < 0 ? 0 : pos >= (600 - 100) ? 500 : pos
   }
 
   function draw () {
@@ -133,7 +168,7 @@ function Engine (ctx) {
     prevBallPositions.map(drawBluriedBall)
     ctx.fillRect(x1, y1, 15, 15)
     prevBallPositions.push([x1, y1])
-    if (prevBallPositions.length >= speed - 12) {
+    if (prevBallPositions.length >= speed - 9.5) {
       prevBallPositions.shift()
     }
   }
@@ -160,14 +195,19 @@ function Engine (ctx) {
     ctx.fillText(score2, 450, 50)
   }
 
+  function resetEngine () {
+    prevBallPositions = []
+  }
+
   function clear () {
     ctx.clearRect(0, 0, 800, 600)
   }
 
   function handleMousemove (state, top, bottom) {
     return (event) => {
-      const yPos = event.clientY
-      state.player1y = yPos - top - 50
+      const pos = event.clientY - top - 50
+      // Do not allow player to cross game canvas borders
+      state.player1y = pos < 0 ? 0 : pos >= (600 - 100) ? 500 : pos
     }
   }
 
@@ -182,6 +222,7 @@ function Engine (ctx) {
 
   return {
     setEvents: setEvents,
+    resetEngine: resetEngine,
     reflectionAngle: reflectionAngle,
     drawScores: drawScores,
     drawPlayer: drawPlayer,
